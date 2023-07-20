@@ -1,0 +1,33 @@
+{
+  "type"           : "Coverity analysis configuration",
+  "format_version" : 12,
+  "language"       : "Java",
+  "directives" : [
+    {
+      "text_checker_name" : "TEXT.PLM_HARDCODED_PASSWORD",
+
+      "file_pattern"   : { "regex" : ".*$",
+                           "case_sensitive" : false },
+
+      "defect_pattern" : { "regex" : "UDC_Password*|UDC_PWD*", "case_sensitive" : false},
+	  "defect_message"     : "hardcoded password found.",
+      "remediation_advice" : "remove hardcoded password credentials.",
+	  "new_issue_type" : {
+        "type" : "leftover_debug_code",
+
+        "name" : "hardcoded password",
+        "description"  : "hardcoded password found.",
+        "local_effect" : "If hard-coded passwords are used, it is almost certain that malicious users will gain access through the account in question.",
+         "cwe" : 259,
+         "impact"   : "High",
+         "category" : "High impact security",
+         "security_kind" : true,
+       }
+    },
+  	/* Add new custom checkers here*/
+	
+   ]
+}
+
+  ]
+}

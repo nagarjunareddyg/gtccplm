@@ -1,0 +1,77 @@
+# Default values
+ENV_NAME ?= dev
+BRANCH ?= later
+
+#VAR_DOCKER_REGISTRY ?= $($(ENV_NAME)_ACCOUNT).$(ECR_DOCKER_REGISTRY)/$(UAI)-$(APP)-$(ENV_NAME)
+VAR_DOCKER_IMAGE ?= $($(ENV_NAME)_ACCOUNT).$(ECR_DOCKER_REGISTRY)/$(REPO_NAME):latest
+#VAR_BASE_IMAGE ?= $($(ENV_NAME)_ACCOUNT).$(ECR_DOCKER_REGISTRY)/$(UAI)-$(APP)-$(ENV_NAME):cisbaseubuntu
+#VAR_BASE_IMAGE ?= $($(ENV_NAME)_ACCOUNT).$(ECR_DOCKER_REGISTRY)/$(UAI)-$(APP)-$(ENV_NAME):ubuntu1804
+VAR_BASE_IMAGE ?= $($(ENV_NAME)_ACCOUNT).$(ECR_DOCKER_REGISTRY)/$(UAI)-$(APP)-$(ENV_NAME):ubuntu2004
+VAR_DOCKER_REGISTRY ?= 880379568593.$(ECR_DOCKER_REGISTRY)/$(REPO_NAME)
+
+UPDATE_SERVICE_FLAG ?= no
+PRODUCTION_APPROVER=satyaprasad.lanka@ge.com
+
+#AWS settings
+dev_ACCOUNT ?= 880379568593
+qa_ACCOUNT ?= 598619258634
+prd_ACCOUNT ?= 907050794246
+UAI ?= uai3026525
+APP ?= powerplmgtcc
+ECR_DOCKER_REGISTRY ?= dkr.ecr.us-east-1.amazonaws.com
+
+#Twistlock settings
+TWISTCLI_ADDRESS ?= https://us-east1.cloud.twistlock.com/us-2-158286731
+TWISTCLI_INSTALL ?= /gpcloud/dev/twistcli
+
+# Build tag expression - can be used to evaulate a shell expression at runtime
+#BUILD_TAG_EXPRESSION ?= date -u +%Y%m%d%H%M%S
+
+# Execute shell expression
+#BUILD_EXPRESSION := $(shell $(BUILD_TAG_EXPRESSION))
+
+# Build tag - defaults to BUILD_EXPRESSION if not defined
+#BUILD_TAG ?= $(BUILD_EXPRESSION)
+
+# Check and Inspect Logic
+#INSPECT := $$(docker-compose -p $$1 -f $$2 ps -q $$3 | xargs -I ARGS docker inspect -f "{{ .State.ExitCode }}" ARGS)
+
+CHECK := @bash -c '\
+  if [[ $(INSPECT) -ne 0 ]]; \
+  then exit $(INSPECT); fi' VALUE
+
+# Dangling image function
+# Syntax: $(call clean_dangling_images,<repository>)
+clean_dangling_images = docker images -q -f dangling=true label=application=$(1) | xargs -I ARGS docker rmi ARGS || true
+
+# Clean image function
+# Syntax: $(call clean_dangling_images,<repository>) 
+clean_images = docker images -q -f label=application=$(1) | xargs -I ARGS docker rmi -f ARGS || true
+
+# Clean exited=1 containers
+# Syntax: $(call clean_dangling_containers) 
+clean_dangling_containers = docker rm -f $(docker ps -aq --filter 'exited=1') || true
+
+# Cosmetics
+YELLOW := "\e[1;33m"
+NC := "\e[0m"
+
+# Shell Functions
+INFO := @bash -c '\
+  printf $(YELLOW); \
+  echo "=> $$1"; \
+  printf $(NC)' SOME_VALUE
+
+# Get image id of application service
+IMAGE_ID := $$(docker inspect -f '{{ .Image }}' $(APP_CONTAINER_ID))
+
+# maven build
+MAVEN_BUILD := mvn -s ./settings.xml clean package docker:build -DskipTests=true
+
+# exit 1
+EXIT := @bash -c 'exit 1'
+
+# delete untagged images
+# Syntax: $(call delete_untagged,<aws repository name>)
+DELETE_UNTAGGED := $$(aws ecr list-images --region us-east-1 --repository-name=$(1) --filter tagStatus=UNTAGGED --query 'imageIds[*]' --output text \
+                    | while read imageId; do aws ecr batch-delete-image --region us-east-1 --repository-name=$(1) --image-ids imageDigest=$(imageId); done || true)
